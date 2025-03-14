@@ -33,6 +33,12 @@ Results of simulations where two serial homologs are under divergent selection.
 ## out_concordant/
 Results of simulations where two serial homologs are under concordant selection.
 
+## File name structure
+Files have two types of with name formats:
+"sim_nwf_out_end_<optimum_of_serial_homolog_1>\_<optimum_of_serial_homolog_1>\_<number_of_targets_shared_by_IDGs>\_<correlational_selection_coefficient>.txt" (output at the end of simulations)
+and
+"sim_nwf_out_all_<optimum_of_serial_homolog_1>\_<optimum_of_serial_homolog_1>\_<number_of_targets_shared_by_IDGs>\_<correlational_selection_coefficient>.txt" (simulation output over time)
+
 # id_wf/
 Results from simulations of shifting character identity in WF populations.
 
