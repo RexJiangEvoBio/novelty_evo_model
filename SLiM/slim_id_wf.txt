@@ -1,0 +1,234 @@
+// Simulate the evolution of 1 character with shifting identity; each identity corresponds to an IDG
+// Mutations affect a single continuous variable (c, interpreted as a morphogen's concentration), which determines the state of C
+// This file is meant to be a 'generic' version that can serve as a base for more cutomizations.
+
+initialize(){
+    // Population size
+    defineConstant("N",1000);
+    
+    // Simulation time
+    defineConstant("time",10*N);
+    
+    // Number of populations
+    defineConstant("npop",1);
+    
+    // Constants related to the regulatory architecture
+    defineConstant("C_ances",c(1,0)); // Ancestral state of effect of local trans-environments on IDG expression
+    defineConstant("A1_ances",1); // Response of an SDG to IDG_1 if it is ancestrally a target
+    defineConstant("A2_ances",1); // Response of an SDG to IDG_2 if it is ancestrally a target
+    defineConstant("B1",0.25); // Phenotypic effect of IDG_1's unique targets
+    defineConstant("B2",-0.25); // Phenotypic effect of IDG_2's unique targets
+    defineConstant("B_share",0.25); // Phenotypic effect of two IDGs' shared targets
+    
+    // Set mutation parameters (assumed to be the same among genes of the same category)
+    initializeMutationRate(1e-6); // Mutation rate per mutable genomic element
+    defineConstant("mut_L_mean",0); // Mean effect of cis-mutations on each IDG's expression 
+    defineConstant("mut_L_sd",0.1); // SD of cis-mutations' effect on each IDG's expression
+    defineConstant("mut_A_mean",c(0,0)); // Mean effect of cis-mutations on an SDG's response to IDGs; each element corresponds to an IDG
+    defineConstant("mut_A_mat_share",matrix(c(0.01,0.009,0.009,0.01),nrow=2)); // Covariance matrix for effect of cis-mutations in shared targets of IDGs; each row/column corresponds to an IDG
+    defineConstant("mut_A_mat_unique",matrix(c(0.01,0,0,0.01),nrow=2)); // Covariance matrix for effect of cis-mutations in unique targets of IDGs; each row/column corresponds to an IDG
+    defineConstant("mut_C_mean",0); // Mean effect of regulatory mutations on c
+    defineConstant("mut_C_sd",0.1); // SD of mutations' effect on c
+    
+    // Set mutation types
+    initializeMutationType("m1",0.5,"n",0,0.5); // cis-mutations affecting IDG_1
+    initializeMutationType("m2",0.5,"n",0,0.5); // cis-mutations affecting IDG_2
+    initializeMutationType("m3",0.5,"n",0,0.5); // cis-mutations affecting shared targets of IDGs
+    initializeMutationType("m4",0.5,"n",0,0.5); // cis-mutations affecting unique targets of IDG_1
+    initializeMutationType("m5",0.5,"n",0,0.5); // cis-mutations affecting unique targets of IDG_2
+    initializeMutationType("m6",0.5,"n",0,0.5); // Identity-altering mutations
+    m1.convertToSubstitution=F;m2.convertToSubstitution=F;m3.convertToSubstitution=F;m4.convertToSubstitution=F;m5.convertToSubstitution=F;m6.convertToSubstitution=F; // Do not convert any mutation to Substitution
+    
+    // Genomic element types (cis-elements of IDGs and SDGs; each following an infinite-sites model)
+    initializeGenomicElementType("g1",m1,1); // cis-element(s) of IDG_1
+    initializeGenomicElementType("g2",m2,1); // cis-element(s) of IDG_2
+    initializeGenomicElementType("g3",m3,1); // shared targets of IDGs
+    initializeGenomicElementType("g4",m4,1); // unique targets of IDG_1
+    initializeGenomicElementType("g5",m5,1); // unique targets of IDG_2
+    initializeGenomicElementType("g6",m6,1); // loci affecting identity
+    
+    // Genomic elements
+    defineConstant("ngene_per_SH",20); // Number of SDGs per SH
+    defineConstant("ngene_share",0); // Number of shared targets of IDGs
+    defineConstant("ngene_unique",ngene_per_SH-ngene_share); // Number of unique targets per IDG
+    defineConstant("ngene_C",1);
+    if(ngene_share==0){ // If there are no shared targets, initialize unique targets only
+        initializeGenomicElement(g4,0,ngene_per_SH-1);
+        initializeGenomicElement(g5,ngene_per_SH,2*ngene_per_SH-1);
+    }else{
+        initializeGenomicElement(g3,0,ngene_share-1); // Initialize shared targets
+        if(ngene_share<ngene_per_SH){ // If there are unique targets, initialize them
+            initializeGenomicElement(g4,ngene_share,ngene_share+ngene_unique-1);
+            initializeGenomicElement(g5,ngene_share+ngene_unique,ngene_share+2*ngene_unique-1);
+        }
+    }
+    initializeGenomicElement(g6,2*ngene_per_SH-ngene_share,2*ngene_per_SH-ngene_share+ngene_C-1); // Locus affecting identity
+   
+    // Compute ancestral phenotype
+    defineConstant("z_ances",exp(C_ances[0]*A1_ances*B1*ngene_unique*2+C_ances[1]*A2_ances*B2*ngene_unique*2+(C_ances[0]*A1_ances+C_ances[1]*A2_ances)*B_share*ngene_share*2));
+    
+    initializeRecombinationRate(0.5); // Free recombination between genes (relative location does not matter)
+    
+    // Selection parameters
+    defineConstant("opt_log",-10);
+    defineConstant("opt",exp(opt_log)); // Optimal phenotype
+    defineConstant("selection_var",1); // Variance of Gaussian fitness function (of Euclidean distance to optimum after log-transformation)
+    
+}
+
+// Print ancestral character states as sanity check
+1 early(){
+    catn(log(z_ances));
+    catn(log(opt));
+}
+
+// Create populations
+1 late(){
+    //sim.addSubpop("p1", N);
+    for(i in 0:(npop-1)){
+        sim.addSubpop(i,N);
+    }
+    for(i in 0:(npop-1)){
+        for(j in 0:(npop-1)){
+            if(i != j){sim.subpopulations[i].setMigrationRates(j,0);} // Set all migration rates as zero such that each population is an independent lineage
+        }
+    }
+}
+
+// Callback (function) for sampling mutation effetcs (called every time a mutation is generated)
+mutation(m1){
+    effect=rnorm(1,mean=mut_L_mean,sd=mut_L_sd^0.5); // Sample effect from a univariate normal distribution
+    mut.setValue("eL1",effect);
+    old_effects=sim.getValue("all_effects_L1");
+    sim.setValue("all_effects_L1",c(old_effects,effect));
+    return T;
+}
+
+mutation(m2){
+    effect=rnorm(1,mean=mut_L_mean,sd=mut_L_sd^0.5); // Sample effect from a univariate normal distribution
+    mut.setValue("eL2",effect);
+    old_effects=sim.getValue("all_effects_L2");
+    sim.setValue("all_effects_L2",c(old_effects,effect));
+    return T;
+}
+
+mutation(m3){
+    effects=rmvnorm(1,mut_A_mean,mut_A_mat_share); // Sample effect from a multivariate normal distribution
+    mut.setValue("eA1",effects[0]);
+    mut.setValue("eA2",effects[1]);
+    old_effects=sim.getValue("all_effects_A");
+    sim.setValue("all_effects_A",rbind(old_effects, effects));
+    return T;
+}
+
+mutation(m4){
+    effects=rmvnorm(1,mut_A_mean,mut_A_mat_unique); // Sample effect from a multivariate normal distribution
+    mut.setValue("eA1",effects[0]);
+    mut.setValue("eA2",effects[1]);
+    old_effects=sim.getValue("all_effects_A");
+    sim.setValue("all_effects_A",rbind(old_effects, effects));
+    return T;
+}
+
+mutation(m5){
+    effects=rmvnorm(1,mut_A_mean,mut_A_mat_unique); // Sample effect from a multivariate normal distribution
+    mut.setValue("eA1",effects[0]);
+    mut.setValue("eA2",effects[1]);
+    old_effects=sim.getValue("all_effects_A");
+    sim.setValue("all_effects_A",rbind(old_effects, effects));
+    return T;
+}
+
+mutation(m6){
+    effect=rnorm(1,mut_C_mean,mut_C_sd); // Sample effect from a univariate normal distribution
+    mut.setValue("eC",effect);
+    old_effects=sim.getValue("all_effects_C");
+    sim.setValue("all_effects_C",c(old_effects, effect));
+    return T;
+}
+
+// Calculate phenotype given mutation effects
+late(){
+    for(ind in sim.subpopulations.individuals){ // go through individuals in the population
+        // Vectors containing all mutations of each type
+        muts1=ind.genomes.mutationsOfType(m1);
+        muts2=ind.genomes.mutationsOfType(m2);
+        muts3=ind.genomes.mutationsOfType(m3);
+        muts4=ind.genomes.mutationsOfType(m4);
+        muts5=ind.genomes.mutationsOfType(m5);
+        muts6=ind.genomes.mutationsOfType(m6);
+        
+        L1=size(muts1)?sum(muts1.getValue("eL1")) else 0; // Total effect of mutations on cis-elements of IDG_1
+        L2=size(muts2)?sum(muts2.getValue("eL2")) else 0; // Total effect of mutations on cis-elements of IDG_2
+        
+        cc=size(muts6)?sum(muts6.getValue("eC")) else 0; // Total effect of mutations on c
+        // Assign identity according to value of C
+        if(cc>=0){
+            C=c(1,0);
+        }else{
+            C=c(0,1);
+        }
+        ind.setValue("C1",C[0]);
+        ind.setValue("C2",C[1]);
+        X=c(C[0]*exp(L1),C[1]*exp(L2)); // IDG expression
+        
+        // Expression of IDG_1's unique targets
+        A11=size(muts4)?sum(muts4.getValue("eA1")) else 0;A11=A11+A1_ances*ngene_unique*2; // Response to IDG_1
+        A12=size(muts4)?sum(muts4.getValue("eA2")) else 0; // Response to IDG_2
+        Y1=exp(X[0]*A11+X[1]*A12);
+        
+        // Expression of IDG_2's unique targets
+        A21=size(muts5)?sum(muts5.getValue("eA1")) else 0; // Response to IDG_1
+        A22=size(muts5)?sum(muts5.getValue("eA2")) else 0;A22=A22+A2_ances*ngene_unique*2; // Response to IDG_2
+        Y2=exp(X[0]*A21+X[1]*A22);
+        
+        // Expression of shared targets
+        A_share_1=size(muts3)?sum(muts3.getValue("eA1")) else 0;A_share_1=A_share_1+A1_ances*ngene_share*2;
+        A_share_2=size(muts3)?sum(muts3.getValue("eA2")) else 0;A_share_2=A_share_2+A2_ances*ngene_share*2;
+        Y_share=exp(X[0]*A_share_1+X[1]*A_share_2);
+        
+        z=exp(B1*log(Y1)+B2*log(Y2)+B_share*log(Y_share));ind.setValue("z",z); // Character state
+        
+        // Calculate distance to optimum for each SH
+        d=log(z/opt);
+        ind.fitnessScaling=exp(-d^2/(2*selection_var)); // Calculate fitness
+        
+    }
+}
+
+// Trajectory of evolution
+1: late(){
+    lines=NULL;
+    if(sim.cycle%100==0){ // Write every 100 generations
+        for(i in 0:(npop-1)){
+            inds=sim.subpopulations[i].individuals;
+            z_pop_mean=mean(log(inds.getValue("z"))); // Population means
+            vg=var(log(inds.getValue("z"))); // Within-population variances
+            c1_pop_mean=mean(inds.getValue("C1"));
+            c2_pop_mean=mean(inds.getValue("C2"));
+            outLine=paste0(sim.cycle,"\t",i+1,"\t",z_pop_mean,"\t",vg,"\t",c1_pop_mean,"\t",c2_pop_mean,"\n");
+            lines=c(lines,outLine);
+        }
+        file=paste0(lines);
+        cat(file);
+    }
+}
+
+// Examine results at the end of simulations
+time late(){
+    sim.simulationFinished();
+    lines_end=NULL;
+    for(i in 0:(npop-1)){
+        inds=sim.subpopulations[i].individuals;
+        z_pop_mean=mean(log(inds.getValue("z"))); // Population means
+        vg=var(log(inds.getValue("z"))); // Within-population variances
+        c1_pop_mean=mean(inds.getValue("C1"));
+        c2_pop_mean=mean(inds.getValue("C2"));
+        outLine=paste0(i+1,"\t",z_pop_mean,"\t",vg,"\t",c1_pop_mean,"\t",c2_pop_mean,"\n");
+        lines_end=c(lines_end,outLine);
+    }
+    file_end=paste0(lines_end);
+    //cat(file_end);
+    filename_end=paste0("your_directory/sim_id_out_end_",opt_log,"_",l_C,".txt");
+    writeFile(filename_end,file_end);
+}
