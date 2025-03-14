@@ -17,9 +17,9 @@ Results of simulations where both serial homologs are under stabilizing selectio
 
 ## File name structure
 Files have two types of with name formats:
-"sim_out_end_<optimum_of_serial_homolog_1>_<optimum_of_serial_homolog_1>_<number_of_targets_shared_by_IDGs>_<correlational_selection_coefficient>.txt" (output at the end of simulations)
+"sim_out_end_<optimum_of_serial_homolog_1>\_<optimum_of_serial_homolog_1>\_<number_of_targets_shared_by_IDGs>\_<correlational_selection_coefficient>.txt" (output at the end of simulations)
 and
-"sim_out_all_<optimum_of_serial_homolog_1>_<optimum_of_serial_homolog_1>_<number_of_targets_shared_by_IDGs>_<correlational_selection_coefficient>.txt" (simulation output over time)
+"sim_out_all_<optimum_of_serial_homolog_1>\_<optimum_of_serial_homolog_1>\_<number_of_targets_shared_by_IDGs>\_<correlational_selection_coefficient>.txt" (simulation output over time)
 
 # 2sh_nwf/
 Results from simulations of two serial homologs with conserved identities in non-WF populations.
