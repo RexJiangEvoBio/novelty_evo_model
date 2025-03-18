@@ -42,5 +42,17 @@ and
 # id_wf/
 Results from simulations of shifting character identity in WF populations.
 
+## File name structure
+Files have two types of with name formats:
+"sim_id_out_end_<optimal_phenotype>_<number_of_loci_affecting_character_identity>.txt" (output at the end of simulations)
+and
+"sim_id_out_all_<optimal_phenotype>_<number_of_loci_affecting_character_identity>.txt" (simulation output over time)
+
 # id_nwf/
 Results from simulations of shifting character identity in non-WF populations.
+
+## File name structure
+Files have two types of with name formats:
+"sim_nwf_id_out_end_<optimal_phenotype>_<number_of_loci_affecting_character_identity>.txt" (output at the end of simulations)
+and
+"sim_nwf_id_out_all_<optimal_phenotype>_<number_of_loci_affecting_character_identity>.txt" (simulation output over time)
